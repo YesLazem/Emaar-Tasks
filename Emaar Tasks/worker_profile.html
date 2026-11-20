@@ -41,6 +41,7 @@
     let currentUid = null;
     let currentWorkerId = null;
     let timeoutTimer;
+    const safe = value => String(value ?? '').replace(/[&<>"\']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
     window.handleLogout = async function(e) {
       e.preventDefault();
@@ -79,6 +80,7 @@
             const userData = docSnap.data();
             if (userData.workerId) {
                currentWorkerId = userData.workerId;
+               try { await updateDoc(doc(db, 'users', user.uid), { lastLoginAt: Date.now() }); } catch (e) { console.warn('تعذر تحديث آخر دخول',e); }
                loadProfile();
             } else {
                document.getElementById('profileContent').innerHTML = `
@@ -113,24 +115,25 @@
                 <div style="width: 100px; height: 100px; background: var(--primary); border-radius: 50%; display: flex; justify-content: center; align-items: center; margin: 0 auto 15px auto;">
                     <i class="ph ph-user" style="font-size: 50px; color: white;"></i>
                 </div>
-                <h2 style="color: var(--primary);">${worker.name || 'عامل'}</h2>
-                <p style="color: var(--text-muted);">${worker.role || 'عامل'}</p>
+                <h2 style="color: var(--primary);">${safe(worker.name || 'عامل')}</h2>
+                <p style="color: var(--text-muted);">${safe(worker.role || 'عامل')}</p>
             </div>
 
-            <form onsubmit="saveProfile(event)">
+            <form id="workerProfileForm">
                 <div class="form-group">
                     <label>الاسم الكامل</label>
-                    <input type="text" id="profileName" value="${worker.name || ''}" required>
+                    <input type="text" id="profileName" value="${safe(worker.name || ''}" required>
                 </div>
                 <div class="form-group">
                     <label>رقم الهاتف</label>
-                    <input type="text" id="profilePhone" value="${worker.phone || ''}">
+                    <input type="tel" id="profilePhone" maxlength="30" value="${safe(worker.phone || '')}">
                 </div>
                 <button type="submit" style="width: 100%; justify-content: center; background: var(--primary); margin-top: 10px;">
                     <i class="ph ph-check"></i> حفظ التعديلات
                 </button>
             </form>
           `;
+          document.getElementById('workerProfileForm').addEventListener('submit', window.saveProfile);
       } catch (err) {
           console.error("Error loading profile:", err);
           document.getElementById('profileContent').innerHTML = `<p style="color: red;">حدث خطأ أثناء تحميل الملف: ${err.message}</p>`;
