@@ -45,8 +45,10 @@ const Saves = (() => {
     updateWorker: async (id, patch) => {
       try {
         await updateDoc(doc(db, 'workers', id), patch);
+        return true;
       } catch (e) {
         console.error("Firebase updateWorker error:", e);
+        throw e;
       }
     },
     removeWorker: async (id) => {
@@ -54,6 +56,29 @@ const Saves = (() => {
         await deleteDoc(doc(db, 'workers', id));
       } catch (e) {
         console.error("Firebase removeWorker error:", e);
+      }
+    },
+
+    // --- WORKER HISTORY ---
+    getWorkerHistory: async (workerId) => {
+      try {
+        const snapshot = await getDocs(collection(db, 'worker_history'));
+        return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+          .filter((event) => event.workerId === workerId)
+          .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+      } catch (e) {
+        console.error("Firebase getWorkerHistory error:", e);
+        throw e;
+      }
+    },
+    addWorkerHistory: async (event) => {
+      try {
+        const { id, ...data } = event;
+        const result = await addDoc(collection(db, 'worker_history'), data);
+        return result.id;
+      } catch (e) {
+        console.error("Firebase addWorkerHistory error:", e);
+        throw e;
       }
     },
 
