@@ -33,7 +33,20 @@
   <script src="settings.js"></script>
   
   <script type="module">
+    import { db, auth } from './firebase-config.js';
     import Saves from './saves.js';
+    import { collection, getDocs, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+    const ADMIN_EMAILS = ['hazemyt55@gmail.com','m.salama@emaar.gulf'];
+    const safe = value => String(value ?? '').replace(/[&<>"\']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    window.handleLogout = async e => { e.preventDefault(); await signOut(auth); location.href='index.html'; };
+    onAuthStateChanged(auth, user => {
+      if (!user) { location.href='index.html'; return; }
+      if (!user.emailVerified || !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
+        document.getElementById('profileContent').textContent='غير مصرح بالدخول إلى ملفات الإدارة.'; return;
+      }
+      loadProfile();
+    });
 
     async function loadProfile() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -46,6 +59,7 @@
 
       const workers = await Saves.getWorkers();
       const tasks = await Saves.getTasks();
+      const historySnap = await getDocs(collection(db, 'worker_history')).catch(() => ({ docs: [] }));
       
       const worker = workers.find(w => w.id === workerId);
 
@@ -64,7 +78,11 @@
 
       const todoTasks = myTasks.filter(t => t.status === 'pending');
       const doneTasks = myTasks.filter(t => t.status === 'done');
-      const activeTasks = myTasks.filter(t => t.status !== 'pending' && t.status !== 'done');
+      const activeTasks = myTasks.filter(t => t.status === 'in_progress');
+      const reviewTasks = myTasks.filter(t => t.status === 'review');
+      const percent = myTasks.length ? Math.round(doneTasks.length / myTasks.length * 100) : 0;
+      const history = historySnap.docs.map(d => ({id:d.id,...d.data()})).filter(e => e.workerId === workerId).sort((a,b) => Number(b.createdAt||0)-Number(a.createdAt||0));
+      const fmt = value => { if(!value) return 'غير مسجل'; const d=value?.toDate?value.toDate():new Date(value); return Number.isNaN(d.getTime())?'غير مسجل':d.toLocaleDateString('ar-SA'); };
 
       // Render the clean profile view with updated titles
       document.getElementById('profileContent').innerHTML = `
@@ -73,11 +91,15 @@
             <i class="ph ph-user"></i>
           </div>
           <div>
-            <h1 style="margin: 0; color: white !important;">${worker.name}</h1>
-            <p style="margin: 5px 0 0 0; color: white !important; opacity: 0.9;">${worker.role || 'عامل'} | ${worker.phone || 'لا يوجد رقم'}</p>
+            <h1 style="margin: 0; color: white !important;">${safe(worker.name)}</h1>
+            <p style="margin: 5px 0 0 0; color: white !important; opacity: 0.9;">${safe(worker.role || 'عامل')} | ${safe(worker.phone || 'لا يوجد رقم')}</p>
           </div>
         </div>
 
+        <div class="card" style="margin-top:20px"><h2>نسبة الإنجاز: ${percent}%</h2><div style="height:10px;background:var(--border);border-radius:20px;overflow:hidden"><div style="height:100%;width:${percent}%;background:var(--success)"></div></div><p>إجمالي ${myTasks.length} · مكتمل ${doneTasks.length} · تنفيذ ${activeTasks.length} · مراجعة ${reviewTasks.length} · انتظار ${todoTasks.length}</p></div>
+        <div class="card"><h2>البيانات الوظيفية والتواريخ</h2><div class="grid-3"><div>الميلاد: ${fmt(worker.birthDate)}</div><div>التعيين: ${fmt(worker.hireDate)}</div><div>بداية العقد: ${fmt(worker.contractStartDate)}</div><div>نهاية العقد: ${fmt(worker.contractEndDate)}</div><div>آخر ترقية: ${fmt(worker.promotionDate)}</div><div>آخر تقييم: ${fmt(worker.lastEvaluationDate)}</div><div>آخر تحديث: ${fmt(worker.updatedAt)}</div></div></div>
+        <div class="card"><h2>تحديث بيانات الملف (الإدارة)</h2><form id="adminWorkerForm"><div class="grid-3"><div class="form-group"><label>الاسم</label><input id="adminName" value="${safe(worker.name || '')}" required></div><div class="form-group"><label>المسمى</label><input id="adminRole" value="${safe(worker.role || '')}"></div><div class="form-group"><label>الهاتف</label><input id="adminPhone" value="${safe(worker.phone || '')}"></div>${[['birthDate','تاريخ الميلاد'],['hireDate','تاريخ التعيين'],['contractStartDate','بداية العقد'],['contractEndDate','نهاية العقد'],['promotionDate','تاريخ الترقية'],['lastEvaluationDate','آخر تقييم']].map(([id,label])=>`<div class="form-group"><label>${label}</label><input type="date" id="${id}" value="${safe(worker[id] || '')}"></div>`).join('')}</div><button type="submit">حفظ البيانات</button></form></div>
+        <div class="card"><h2>إضافة حدث تاريخي</h2><form id="historyForm"><div class="form-group"><label>عنوان الحدث</label><input id="historyTitle" required maxlength="100"></div><div class="form-group"><label>الوصف</label><textarea id="historyDescription" required maxlength="1000"></textarea></div><button type="submit">إضافة للسجل</button></form><h3>السجل الزمني</h3>${history.length ? history.map(e=>`<div style="padding:10px;border-right:3px solid var(--primary);margin:10px 0;background:var(--bg)"><strong>${safe(e.title)}</strong><p>${safe(e.description)}</p><small>${fmt(e.createdAt)} · ${safe(e.updatedByEmail || 'الإدارة')}</small></div>`).join('') : '<p>لا توجد أحداث مسجلة.</p>'}</div>
         <div class="grid-3" style="margin-top: 20px;">
           <!-- Column 1: Pending -->
           <div class="card">
@@ -110,9 +132,14 @@
           </div>
         </div>
       `;
+      document.getElementById('adminWorkerForm').addEventListener('submit', async e => {
+        e.preventDefault(); const patch={name:document.getElementById('adminName').value.trim(),role:document.getElementById('adminRole').value.trim(),phone:document.getElementById('adminPhone').value.trim(),updatedAt:Date.now()};
+        ['birthDate','hireDate','contractStartDate','contractEndDate','promotionDate','lastEvaluationDate'].forEach(k=>patch[k]=document.getElementById(k).value || null);
+        try { await Saves.updateWorker(workerId,patch); await addDoc(collection(db,'worker_history'),{workerId,title:'تحديث البيانات الوظيفية',description:'تم تحديث بيانات الملف',createdAt:Date.now(),updatedByEmail:auth.currentUser.email}); alert('تم الحفظ'); loadProfile(); } catch(err){alert('تعذر الحفظ: '+err.message);}
+      });
+      document.getElementById('historyForm').addEventListener('submit', async e => { e.preventDefault(); try { await addDoc(collection(db,'worker_history'),{workerId,title:document.getElementById('historyTitle').value.trim(),description:document.getElementById('historyDescription').value.trim(),createdAt:Date.now(),updatedByEmail:auth.currentUser.email}); loadProfile(); } catch(err){alert('تعذر إضافة الحدث: '+err.message);} });
     }
 
-    document.addEventListener('DOMContentLoaded', loadProfile);
   </script>
 </body>
 </html>
