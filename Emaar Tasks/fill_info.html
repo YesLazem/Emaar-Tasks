@@ -109,7 +109,7 @@
     import Saves from './saves.js';
     import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-    const ADMIN_EMAILS = ["hazemyt55@gmail.com", "m.salama@emaargulf.com"];
+    const ADMIN_EMAILS = ["hazemyt55@gmail.com", "m.salama@emaar.gulf"];
     let isAdmin = false;
     let currentWorkers = []; 
 
@@ -120,13 +120,17 @@
     };
 
     onAuthStateChanged(auth, (user) => {
-      if (user) {
-        isAdmin = ADMIN_EMAILS.includes(user.email);
-        renderWorkers();
+      if (!user) { window.location.href = 'index.html'; return; }
+      isAdmin = !!user.emailVerified && ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+      if (!isAdmin) {
+        document.querySelector('.main-content').innerHTML = '<div class="card"><h2>غير مصرح بالدخول</h2><p>هذه الصفحة مخصصة للمديرين المعتمدين فقط.</p></div>';
+        return;
       }
+      renderWorkers();
     });
 
     async function renderWorkers() {
+      if (!isAdmin) return;
       const list = document.getElementById('workerList');
       currentWorkers = await Saves.getWorkers();
       
@@ -189,6 +193,7 @@
     }
 
     window.moveWorker = async function(index, direction) {
+      if (!isAdmin) return alert('غير مصرح لك بهذا الإجراء.');
       const targetIndex = index + direction;
       if (targetIndex < 0 || targetIndex >= currentWorkers.length) return;
 
@@ -205,6 +210,7 @@
     };
 
     window.addWorker = async function() {
+      if (!isAdmin) return alert('غير مصرح لك بهذا الإجراء.');
       const name = document.getElementById('workerName').value.trim();
       const role = document.getElementById('workerRole').value.trim();
       const phone = document.getElementById('workerPhone').value.trim();
@@ -224,6 +230,7 @@
     };
 
     window.deleteWorker = async function(id) {
+      if (!isAdmin) return alert('غير مصرح لك بهذا الإجراء.');
       if (confirm('هل أنت متأكد من حذف هذا المهندس؟ (سيتم مسحه من المهام أيضاً)')) {
         await Saves.removeWorker(id);
         renderWorkers();
@@ -231,6 +238,7 @@
     };
 
     window.openEditWorkerModal = async function(id) {
+      if (!isAdmin) return alert('غير مصرح لك بهذا الإجراء.');
       const workers = await Saves.getWorkers();
       const w = workers.find(worker => worker.id === id);
       if (!w) return;
@@ -248,6 +256,7 @@
     };
 
     window.saveEditedWorker = async function() {
+      if (!isAdmin) return alert('غير مصرح لك بهذا الإجراء.');
       const id = document.getElementById('editWorkerId').value;
       const name = document.getElementById('editWorkerName').value.trim();
       const role = document.getElementById('editWorkerRole').value.trim();
