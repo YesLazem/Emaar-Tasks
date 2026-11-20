@@ -3,29 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ملف العامل - إعمار</title>
+  <title>ملف المهندس - إعمار</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
+  <style>
+    .profile-header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      color: white;
+      padding: 40px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 20px rgba(15, 76, 129, 0.2);
+    }
+    .profile-avatar {
+      width: 100px;
+      height: 100px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 50px;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .admin-tool-box {
+      background: #fffbeb;
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+    .task-list-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      height: 100%;
+    }
+    .task-list-card h3 {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+    .task-list-card ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .task-list-card li {
+      padding: 10px 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .task-list-card li:last-child {
+      border-bottom: none;
+    }
+  </style>
 </head>
 <body class="app-body" id="bodyRoot">
 
   <div class="sidebar">
     <div class="logo"><img src="assets/logo.jpg" onerror="this.style.display='none'"> إعمار</div>
-    <a href="dashboard.html"><i class="ph ph-squares-four"></i> لوحة القيادة</a> <!-- CHANGED TO dashboard.html -->
+    <a href="dashboard.html"><i class="ph ph-squares-four"></i> لوحة القيادة</a>
     <a href="projects.html"><i class="ph ph-folder-open"></i> مجلد المشاريع</a>
     <a href="fill_info.html"><i class="ph ph-users"></i> الفريق والإعدادات</a>
-    <a href="board.html" class="active"><i class="ph ph-kanban"></i> لوحة المهام (Board)</a>
+    <a href="board.html"><i class="ph ph-kanban"></i> لوحة المهام (Board)</a>
     <a href="tasks.html"><i class="ph ph-list-dashes"></i> قائمة المهام</a>
-    <a href="report.html"><i class="ph ph-robot"></i> تقرير الذكاء الاصطناعي</a>
+    <a href="report.html"><i class="ph ph-robot"></i> تقرير المشاريع</a>
     <a href="settings.html" style="margin-top: auto; background: rgba(0,0,0,0.2);"><i class="ph ph-gear"></i> الإعدادات</a>
     <a href="#" onclick="handleLogout(event)" style="color: #ef4444;"><i class="ph ph-sign-out"></i> تسجيل الخروج</a>
   </div>
-  
+
   <div class="main-content">
-    <button onclick="window.location.href='fill_info.html'" style="background: var(--bg); color: var(--text-main); border: 1px solid var(--border); margin-bottom: 20px;"><i class="ph ph-arrow-right"></i> العودة للفريق</button>
+    <button onclick="window.location.href='fill_info.html'" style="background: var(--surface); color: var(--text-main); border: 1px solid var(--border); margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+      <i class="ph ph-arrow-right"></i> العودة لقائمة الفريق
+    </button>
     
     <div id="profileContent">
-      <p>جاري تحميل البيانات...</p>
+      <div style="text-align: center; padding: 50px;">
+        <i class="ph ph-spinner-gap" style="font-size: 40px; color: var(--primary);"></i>
+        <p style="margin-top: 15px; color: var(--text-muted);">جاري تحميل ملف المهندس...</p>
+      </div>
     </div>
   </div>
 
@@ -33,84 +99,137 @@
   <script src="settings.js"></script>
   
   <script type="module">
+    import { db, auth } from './firebase-config.js';
     import Saves from './saves.js';
+    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+    const ADMIN_EMAILS = ["hazemyt55@gmail.com", "m.salama@emaargulf.com"];
+
+    window.handleLogout = async function(e) {
+      e.preventDefault();
+      await signOut(auth);
+      window.location.href = 'index.html';
+    };
 
     async function loadProfile() {
       const urlParams = new URLSearchParams(window.location.search);
       const workerId = urlParams.get('id');
 
       if (!workerId) {
-        document.getElementById('profileContent').innerHTML = '<h2>خطأ: لم يتم تحديد العامل.</h2>';
+        document.getElementById('profileContent').innerHTML = '<h2 style="color: var(--danger);">خطأ: لم يتم تحديد المهندس.</h2>';
         return;
       }
 
-      const workers = await Saves.getWorkers();
-      const tasks = await Saves.getTasks();
-      
-      const worker = workers.find(w => w.id === workerId);
+      onAuthStateChanged(auth, async (user) => {
+        const isAdmin = user && ADMIN_EMAILS.includes(user.email);
 
-      if (!worker) {
-        document.getElementById('profileContent').innerHTML = '<h2>خطأ: العامل غير موجود.</h2>';
-        return;
-      }
+        try {
+          const workers = await Saves.getWorkers();
+          const tasks = await Saves.getTasks();
+          
+          const worker = workers.find(w => w.id === workerId);
 
-      // Find all tasks assigned to this worker
-      const myTasks = tasks.filter(t => {
-          const isInArray = t.workerIds && t.workerIds.includes(workerId);
-          const isOldFormat = t.workerId === workerId;
-          const isReviewer = t.reviewerId === workerId;
-          return isInArray || isOldFormat || isReviewer;
+          if (!worker) {
+            document.getElementById('profileContent').innerHTML = '<h2 style="color: var(--danger);">خطأ: المهندس غير موجود في قاعدة البيانات.</h2>';
+            return;
+          }
+
+          // Filter tasks for this worker
+          const myTasks = tasks.filter(t => {
+              const isInArray = t.workerIds && t.workerIds.includes(workerId);
+              const isOldFormat = t.workerId === workerId;
+              const isReviewer = t.reviewerId === workerId;
+              return isInArray || isOldFormat || isReviewer;
+          });
+
+          const todoTasks = myTasks.filter(t => t.status === 'pending');
+          const activeTasks = myTasks.filter(t => t.status === 'in_progress' || t.status === 'review');
+          const doneTasks = myTasks.filter(t => t.status === 'done');
+
+          // --- ADMIN ACCOUNT LINKING TOOL ---
+          let adminTool = '';
+          if (isAdmin) {
+              adminTool = `
+                <div class="admin-tool-box">
+                  <h3 style="color: #b45309; margin-bottom: 10px;"><i class="ph ph-link"></i> ربط حساب المستخدم (Admin Tool)</h3>
+                  <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;">
+                    لربط حساب المهندس (حتى يتمكن من تسجيل الدخول ورؤية مهامه)، اكتب بريده الإلكتروني هنا. 
+                    <br><strong>ملاحظة:</strong> يجب إنشاء الحساب أولاً من لوحة تحكم Firebase (Authentication).
+                  </p>
+                  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                      <input type="email" id="linkEmailInput" placeholder="eng@emaargulf.com" style="flex:1; padding: 12px; border-radius: 8px; border: 1px solid var(--border); min-width: 250px;">
+                      <button onclick="linkAccount('${workerId}')" style="background: var(--accent); color: black; padding: 12px 24px; font-weight: bold; border-radius: 8px;">
+                        <i class="ph ph-link"></i> ربط الحساب
+                      </button>
+                  </div>
+                </div>
+              `;
+          }
+
+          document.getElementById('profileContent').innerHTML = `
+            <!-- Profile Header -->
+            <div class="profile-header">
+              <div class="profile-avatar">
+                <i class="ph ph-user"></i>
+              </div>
+              <div>
+                <h1 style="margin: 0; color: white !important; font-size: 32px;">${worker.name}</h1>
+                <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.9;">
+                  <i class="ph ph-briefcase"></i> ${worker.role || 'مهندس'} &nbsp;|&nbsp; 
+                  <i class="ph ph-phone"></i> ${worker.phone || 'لا يوجد رقم'}
+                </p>
+              </div>
+            </div>
+
+            ${adminTool}
+
+            <!-- Task Grids -->
+            <div class="grid-3">
+              <!-- Pending Tasks -->
+              <div class="task-list-card" style="border-top: 4px solid var(--text-muted);">
+                <h3><i class="ph ph-hourglass"></i> قيد الانتظار (${todoTasks.length})</h3>
+                <ul>
+                  ${todoTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد مهام</li>' : todoTasks.map(t => `<li><span>${t.title}</span></li>`).join('')}
+                </ul>
+              </div>
+
+              <!-- Active Tasks -->
+              <div class="task-list-card" style="border-top: 4px solid var(--primary);">
+                <h3><i class="ph ph-spinner"></i> جاري العمل (${activeTasks.length})</h3>
+                <ul>
+                  ${activeTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد مهام</li>' : activeTasks.map(t => `<li><span>${t.title}</span></li>`).join('')}
+                </ul>
+              </div>
+
+              <!-- Done Tasks -->
+              <div class="task-list-card" style="border-top: 4px solid var(--success);">
+                <h3><i class="ph ph-check-circle"></i> مكتملة (${doneTasks.length})</h3>
+                <ul>
+                  ${doneTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد مهام</li>' : doneTasks.map(t => `<li><span style="text-decoration: line-through; color: var(--text-muted);">${t.title}</span></li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          `;
+        } catch (error) {
+          console.error(error);
+          document.getElementById('profileContent').innerHTML = `<p style="color: var(--danger);">حدث خطأ: ${error.message}</p>`;
+        }
       });
-
-      const todoTasks = myTasks.filter(t => t.status === 'pending');
-      const doneTasks = myTasks.filter(t => t.status === 'done');
-      const activeTasks = myTasks.filter(t => t.status !== 'pending' && t.status !== 'done');
-
-      // Render the clean profile view with updated titles
-      document.getElementById('profileContent').innerHTML = `
-        <div class="card" style="display: flex; align-items: center; gap: 20px; background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: white;">
-          <div style="width: 80px; height: 80px; background: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 40px; color: var(--primary);">
-            <i class="ph ph-user"></i>
-          </div>
-          <div>
-            <h1 style="margin: 0; color: white !important;">${worker.name}</h1>
-            <p style="margin: 5px 0 0 0; color: white !important; opacity: 0.9;">${worker.role || 'عامل'} | ${worker.phone || 'لا يوجد رقم'}</p>
-          </div>
-        </div>
-
-        <div class="grid-3" style="margin-top: 20px;">
-          <!-- Column 1: Pending -->
-          <div class="card">
-            <h3 style="color: var(--text-main); border-bottom: 2px solid var(--border); padding-bottom: 10px;">
-              <i class="ph ph-hourglass"></i> هام (${todoTasks.length})
-            </h3>
-            <ul style="list-style: none; padding: 0; margin-top: 15px;">
-              ${todoTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد</li>' : todoTasks.map(t => `<li style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px;">${t.title}</li>`).join('')}
-            </ul>
-          </div>
-
-          <!-- Column 2: Active -->
-          <div class="card">
-            <h3 style="color: var(--primary); border-bottom: 2px solid var(--primary); padding-bottom: 10px;">
-              <i class="ph ph-spinner"></i> جاري العمل (${activeTasks.length})
-            </h3>
-            <ul style="list-style: none; padding: 0; margin-top: 15px;">
-              ${activeTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد</li>' : activeTasks.map(t => `<li style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px;">${t.title}</li>`).join('')}
-            </ul>
-          </div>
-
-          <!-- Column 3: Done -->
-          <div class="card">
-            <h3 style="color: var(--success); border-bottom: 2px solid var(--success); padding-bottom: 10px;">
-              <i class="ph ph-check-circle"></i> تم الانتهاء (${doneTasks.length})
-            </h3>
-            <ul style="list-style: none; padding: 0; margin-top: 15px;">
-              ${doneTasks.length === 0 ? '<li style="color: var(--text-muted);">لا يوجد</li>' : doneTasks.map(t => `<li style="padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; text-decoration: line-through; color: var(--text-muted);">${t.title}</li>`).join('')}
-            </ul>
-          </div>
-        </div>
-      `;
     }
+
+    window.linkAccount = async function(workerId) {
+        const email = document.getElementById('linkEmailInput').value.trim();
+        if (!email) return alert('الرجاء إدخال البريد الإلكتروني.');
+
+        try {
+            await Saves.linkUserToWorker(email, workerId);
+            alert('تم ربط الحساب بنجاح! الحساب الآن سيرى مهام هذا المهندس.');
+            if (typeof Sounds !== 'undefined') Sounds.playSuccess();
+        } catch (error) {
+            alert("حدث خطأ: " + error.message + "\n\nتأكد من أنك قمت بإنشاء المستخدم في Firebase Authentication أولاً.");
+        }
+    };
 
     document.addEventListener('DOMContentLoaded', loadProfile);
   </script>
